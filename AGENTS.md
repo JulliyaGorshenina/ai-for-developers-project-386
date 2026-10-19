@@ -1,105 +1,96 @@
 # AGENTS.md
 
-Guidance for AI agents (and humans) working in this repository.
+Call-booking service ("cal.com lite"): FastAPI + SQLite backend, TypeScript +
+Vite frontend. Two pages: guest booking (`/`) and owner admin (`/admin.html`).
 
-## Project overview
+## Repo map
+- `backend/app/` — FastAPI app. Entrypoint `app.main:app`. `config.py` (env),
+  `db.py` (schema + default schedule seed), `slots.py` (pure slot math),
+  `repository.py`, `routers/` (availability, bookings, admin), `auth.py`.
+- `backend/tests/` — pytest; `conftest.py` sets env and `sys.path`.
+- `frontend/src/` — `main.ts` (booking page), `admin.ts` (owner page), `api.ts`,
+  `types.ts`, `format.ts`.
+- `.github/workflows/` — `ci.yml`, `release-please.yml`, `hexlet-check.yml`.
 
-A small call-booking service ("cal.com lite"):
+## Do not touch
+- `.github/workflows/hexlet-check.yml` and the repository name — Hexlet grading
+  depends on them (do not delete, edit, or rename).
+- `[tool.ruff.lint] ignore = ["B008"]` in `backend/pyproject.toml`: FastAPI
+  `Depends(...)` defaults are intentional; do not "fix" B008.
 
-- **backend/** — Python + FastAPI + SQLite. Publishes free 30-minute slots from
-  a weekly schedule, accepts bookings, and lets the calendar owner view and
-  cancel upcoming meetings. No accounts, no auth beyond a simple admin token.
-- **frontend/** — TypeScript + Vite (vanilla TS). A booking page for guests and
-  an admin page for the owner.
+## Dependencies (non-obvious)
+- Backend runtime + dev deps live in `backend/requirements.txt` — this is what
+  setup and CI install. Add new deps there too (pyproject `dependencies`/`[dev]`
+  are informational; CI does not install the extra).
+- `tzdata` is required: `zoneinfo` has no OS timezone database on Windows.
+- Frontend deps in `frontend/package.json`; CI runs `npm ci`, so keep
+  `frontend/package-lock.json` in sync.
 
-## Layout
-
+## Commands (from repo root)
+Backend:
 ```
-backend/app/       FastAPI application (config, db, slots, auth, routers)
-backend/tests/     pytest suite
-frontend/src/      TypeScript sources (main.ts, admin.ts, api.ts, types.ts)
-frontend/          Vite project (index.html, admin.html, configs)
-.github/workflows/ CI + release-please + hexlet-check (do not touch the latter)
-```
-
-## Prerequisites
-
-- Python 3.10+ (developed on 3.14)
-- Node.js LTS (for the frontend build)
-
-> On this Windows machine `python` is not on `PATH`; use
-> `& "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe"` instead.
-
-## Backend
-
-```powershell
-# one-time setup
-& "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe" -m venv backend\.venv
+& "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe" -m venv backend\.venv   # one-time (venv already exists)
 backend\.venv\Scripts\python -m pip install -r backend\requirements.txt
-
-# run (http://127.0.0.1:8000, docs at /docs)
-backend\.venv\Scripts\python -m uvicorn app.main:app --reload --app-dir backend
-
-# tests
-backend\.venv\Scripts\python -m pytest backend
-
-# lint
+backend\.venv\Scripts\python -m uvicorn app.main:app --reload --app-dir backend  # http://127.0.0.1:8000, /docs
+backend\.venv\Scripts\python -m pytest backend                 # all backend tests
+backend\.venv\Scripts\python -m pytest backend -k test_slots   # single test
 backend\.venv\Scripts\python -m ruff check backend
 backend\.venv\Scripts\python -m ruff format --check backend
 ```
+`python` is not on PATH on this machine — use `backend\.venv\Scripts\python` (or
+the full path above).
 
-## Frontend
-
-```powershell
+Frontend:
+```
 cd frontend
 npm install
-
-npm run dev        # Vite dev server on :5173, proxies /api -> :8000
-npm run build      # type-check + production build into frontend/dist
+npm run dev        # :5173, proxies /api -> :8000
 npm run lint       # eslint
 npm run typecheck  # tsc --noEmit
 npm test           # vitest
+npm run build      # tsc --noEmit && vite build -> frontend/dist
 ```
 
-The production build in `frontend/dist` is served by the backend at `/`.
+## Testing notes
+- `conftest.py` sets `DB_PATH` (temp dir) and `ADMIN_TOKEN=test-token` at import
+  time, before `app` is imported. Import `app` inside test modules, as the
+  existing tests do.
+- Use `with TestClient(app) as client:` — the lifespan seeds the default weekly
+  schedule; without the context manager the DB has no tables.
+- SPA static files are mounted only if `frontend/dist` exists when `app.main` is
+  imported. API tests do not cover this; build the frontend to test `/`.
 
-## Environment variables (backend)
+## Conventions / gotchas
+- Admin endpoints require header `X-Admin-Token` == `ADMIN_TOKEN`.
+- Time: slots are generated in `BOOKING_TZ`, stored/returned as UTC ISO; the
+  frontend renders in the browser timezone.
+- Frontend is multi-page: adding an HTML entry requires updating
+  `build.rollupOptions.input` in `frontend/vite.config.ts`.
+- Versioning is owned by release-please: bump via Conventional Commits;
+  `version.txt` and `CHANGELOG.md` are managed. `backend/pyproject.toml` version
+  is NOT auto-synced (`release-type: simple`) — update it manually if needed.
 
-| Variable       | Default              | Purpose                          |
-| -------------- | -------------------- | -------------------------------- |
-| `ADMIN_TOKEN`  | `dev-admin-token`    | Token for the owner/admin API    |
-| `BOOKING_TZ`   | `Europe/Moscow`      | Timezone used to render slots    |
-| `SLOT_MINUTES` | `30`                 | Slot length in minutes           |
-| `DB_PATH`      | `backend/bookings.db`| SQLite database file             |
+## Env vars (backend)
+| Variable             | Default               | Purpose                          |
+| -------------------- | --------------------- | -------------------------------- |
+| `ADMIN_TOKEN`        | `dev-admin-token`     | Token for the owner/admin API    |
+| `BOOKING_TZ`         | `Europe/Moscow`       | Timezone used to render slots    |
+| `SLOT_MINUTES`       | `30`                  | Slot length in minutes           |
+| `AVAILABILITY_DAYS`  | `14`                  | Days returned by `/availability` |
+| `DB_PATH`            | `backend/bookings.db` | SQLite database file             |
 
 ## CI
-
-`.github/workflows/ci.yml` runs on every push and pull request: it lints and
-tests the backend (ruff + pytest) and lints, type-checks, tests and builds the
-frontend. Keep it green.
+`ci.yml` runs on every push and PR — backend: `ruff check` -> `ruff format
+--check` -> `pytest`; frontend: `npm ci` -> lint -> typecheck -> test -> build.
+Keep it green (Python 3.12, Node 22).
 
 ## Commit message convention — REQUIRED
-
 All commits MUST follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-<type>(<optional scope>): <description>
-```
-
-Common types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `build`,
-`perf`, `style`. Use an optional scope such as `backend`, `frontend` or `ci`.
-
-Examples:
-
-```
-feat(backend): add weekly availability schedule endpoint
-fix(frontend): handle empty slot list
-ci: add release-please workflow
-```
-
-This is mandatory because `release-please` (see
-`.github/workflows/release-please.yml`) reads the commit history to build the
-changelog and bump the version following Semantic Versioning. Breaking changes
-are marked with `!` after the type/scope (e.g. `feat(api)!: ...`) or a
-`BREAKING CHANGE:` footer. Agents author most commits here, so this rule applies
-to them directly.
+`<type>(<optional scope>): <description>` (`feat`, `fix`, `chore`, `docs`,
+`refactor`, `test`, `ci`, `build`, `perf`, `style`; optional scope `backend`,
+`frontend`, `ci`). Breaking changes: `!` after type/scope or a `BREAKING CHANGE:`
+footer. This is mandatory because `release-please`
+(`.github/workflows/release-please.yml`) reads the history to build the changelog
+and bump the version (SemVer). Note: release-please also needs the repository
+setting "Allow GitHub Actions to create and approve pull requests"
+(Settings > Actions > General), otherwise the workflow fails.
