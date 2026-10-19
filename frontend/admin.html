@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Кабинет владельца</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Кабинет владельца</h1>
+      <a href="/">К странице записи</a>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Токен доступа</h2>
+        <div class="row">
+          <input id="token-input" type="password" placeholder="ADMIN_TOKEN" />
+          <button id="save-token">Сохранить</button>
+        </div>
+        <p id="token-status" class="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Недельное расписание</h2>
+        <div id="schedule-rows"></div>
+        <div class="row">
+          <button id="add-window" class="secondary">Добавить окно</button>
+          <button id="save-schedule">Сохранить расписание</button>
+        </div>
+        <p id="schedule-status" class="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Предстоящие встречи</h2>
+        <div id="bookings"></div>
+        <p id="bookings-status" class="status"></p>
+      </section>
+    </main>
+
+    <script type="module" src="/src/admin.ts"></script>
+  </body>
+</html>
