@@ -3,34 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Запись на звонок</title>
+    <title>Календарь звонков — бронирование онлайн</title>
   </head>
   <body>
     <header class="topbar">
-      <h1>Запись на звонок</h1>
-      <a href="/admin.html">Для владельца</a>
+      <h1>Календарь звонков</h1>
+      <nav>
+        <a href="/booking.html">Записаться</a>
+        <a href="/admin.html">Для владельца</a>
+      </nav>
     </header>
 
     <main>
-      <p class="hint">Выберите удобное время — слоты по 30 минут.</p>
-      <p id="status" class="status"></p>
-      <div id="days" class="days"></div>
+      <section class="card hero">
+        <h2>Забронируйте звонок в удобное время</h2>
+        <p class="hint">
+          Владелец календаря публикует свободные слоты из своего недельного
+          расписания, а гость выбирает подходящее время и записывается на
+          звонок. Слоты по 30 минут, без регистрации и личных кабинетов.
+        </p>
+        <p>
+          <a class="cta" href="/booking.html">Записаться на звонок</a>
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Как это работает</h2>
+        <ol>
+          <li>Гость открывает страницу записи и видит свободные слоты.</li>
+          <li>Выбирает удобные дату и время, оставляет имя, email и комментарий.</li>
+          <li>Владелец видит предстоящие встречи в своём кабинете и может отменить запись.</li>
+        </ol>
+      </section>
     </main>
 
-    <dialog id="booking-dialog" class="dialog">
-      <form id="booking-form">
-        <h2 id="dialog-title">Новая запись</h2>
-        <label>Имя<input name="name" required maxlength="200" /></label>
-        <label>Email<input name="email" type="email" required maxlength="200" /></label>
-        <label>Комментарий<textarea name="comment" maxlength="1000" rows="3"></textarea></label>
-        <p id="dialog-error" class="error"></p>
-        <div class="dialog-actions">
-          <button type="button" id="cancel-btn" class="secondary">Отмена</button>
-          <button type="submit">Записаться</button>
-        </div>
-      </form>
-    </dialog>
-
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/home.ts"></script>
   </body>
 </html>

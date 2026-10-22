@@ -32,9 +32,26 @@ body {
   margin: 0;
 }
 
+.topbar nav {
+  display: flex;
+  gap: 16px;
+}
+
 a {
   color: var(--accent);
   text-decoration: none;
+}
+
+.hero h2 {
+  margin-top: 0;
+}
+
+.cta {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
 }
 
 main {
