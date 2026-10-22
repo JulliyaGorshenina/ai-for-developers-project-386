@@ -51,6 +51,20 @@ npm test           # vitest
 npm run build      # tsc --noEmit && vite build -> frontend/dist
 ```
 
+### Node.js / TypeSpec toolchain
+
+`node`/`npm` are not on PATH on this machine. A portable LTS build is installed
+at `%LOCALAPPDATA%\nodejs\node-v24.22.1-win-x64` (Node v24.22.1, npm 11.19.1);
+`@typespec/compiler` (`tsp` 1.17.0) is installed globally there. Prepend it to
+PATH before frontend or TypeSpec commands:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\nodejs\node-v24.22.1-win-x64;" + $env:PATH
+```
+
+Generation commands (TypeSpec -> OpenAPI -> SDK -> server artifacts) will be
+documented here once the contract pipeline lands.
+
 ## Testing notes
 - `conftest.py` sets `DB_PATH` (temp dir) and `ADMIN_TOKEN=test-token` at import
   time, before `app` is imported. Import `app` inside test modules, as the
