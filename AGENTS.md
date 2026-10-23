@@ -132,7 +132,7 @@ $env:PATH = "$env:LOCALAPPDATA\nodejs\node-v24.22.1-win-x64;" + $env:PATH
 - `contract` — TypeSpec → OpenAPI → SDK/models, then `git diff --exit-code`.
 - `backend` — `ruff check` → `ruff format --check` → `pytest`.
 - `frontend` — `npm ci` → lint → typecheck → test → build.
-- `e2e` — Playwright happy path, **non-blocking** (`continue-on-error`).
+- `e2e` — Playwright happy path (blocking; report uploaded on failure).
 Keep it green (Python 3.12, Node 22).
 
 ## Commit message convention — REQUIRED
