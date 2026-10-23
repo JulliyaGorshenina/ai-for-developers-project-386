@@ -22,6 +22,16 @@ def test_generates_half_hour_slots() -> None:
     assert slots[-1][0].hour == 11 and slots[-1][0].minute == 30
 
 
+def test_step_equals_duration() -> None:
+    """A 45-minute type in a 10:00-18:00 window starts every 45 minutes."""
+    windows = [(0, "10:00", "18:00")]
+    slots = generate_slots(MONDAY, windows, 45, TZ)
+    starts = [(start.hour, start.minute) for start, _ in slots]
+    assert starts[:3] == [(10, 0), (10, 45), (11, 30)]
+    assert starts[-1] == (16, 45)
+    assert len(slots) == 10
+
+
 def test_ignores_other_weekdays() -> None:
     windows = [(0, "10:00", "12:00")]
     assert generate_slots(TUESDAY, windows, 30, TZ) == []

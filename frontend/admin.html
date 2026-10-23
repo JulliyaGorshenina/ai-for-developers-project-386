@@ -16,12 +16,24 @@
 
     <main>
       <section class="card">
-        <h2>Токен доступа</h2>
-        <div class="row">
-          <input id="token-input" type="password" placeholder="ADMIN_TOKEN" />
-          <button id="save-token">Сохранить</button>
-        </div>
-        <p id="token-status" class="status"></p>
+        <h2>Типы встреч</h2>
+        <div id="event-types"></div>
+        <form id="event-type-form" class="row">
+          <input name="id" placeholder="идентификатор (slug)" required maxlength="64" />
+          <input name="name" placeholder="Название" required maxlength="200" />
+          <input name="description" placeholder="Описание" maxlength="1000" />
+          <input
+            name="duration_minutes"
+            type="number"
+            min="1"
+            max="600"
+            value="30"
+            required
+            aria-label="Длительность, минут"
+          />
+          <button type="submit">Добавить тип</button>
+        </form>
+        <p id="types-status" class="status"></p>
       </section>
 
       <section class="card">

@@ -2,11 +2,18 @@
 
 import sqlite3
 from collections.abc import Iterator
-from datetime import timezone
+from datetime import datetime, timezone
 
 from . import config
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS event_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0)
+);
+
 CREATE TABLE IF NOT EXISTS schedule (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
@@ -16,6 +23,7 @@ CREATE TABLE IF NOT EXISTS schedule (
 
 CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type_id TEXT NOT NULL,
     slot_start TEXT NOT NULL,
     slot_end TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -25,15 +33,26 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_active_slot
-    ON bookings (slot_start) WHERE status = 'booked';
+CREATE INDEX IF NOT EXISTS idx_bookings_active
+    ON bookings (status, slot_start, slot_end);
 """
+
+# (id, name, description, duration_minutes)
+DEFAULT_EVENT_TYPES: list[tuple[str, str, str, int]] = [
+    ("consultation", "Консультация", "Короткий вводный звонок по проекту.", 30),
+    ("deep-dive", "Подробный разбор", "Глубокий разбор задачи или кода.", 60),
+]
 
 
 def get_connection() -> sqlite3.Connection:
-    """Open a new connection to the SQLite database."""
+    """Open a new connection to the SQLite database.
+
+    ``check_same_thread=False`` because FastAPI may run the dependency and the
+    endpoint on different threadpool threads; each request still owns its own
+    connection, so it is never used concurrently.
+    """
     config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(config.DB_PATH)
+    conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -48,14 +67,25 @@ def get_db() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    """Create tables if missing and seed a default weekly schedule."""
+    """Create tables if missing and seed default event types and schedule."""
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        _seed_event_types(conn)
         _seed_schedule(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _seed_event_types(conn: sqlite3.Connection) -> None:
+    count = conn.execute("SELECT COUNT(*) AS c FROM event_types").fetchone()["c"]
+    if count:
+        return
+    conn.executemany(
+        "INSERT INTO event_types (id, name, description, duration_minutes) VALUES (?, ?, ?, ?)",
+        DEFAULT_EVENT_TYPES,
+    )
 
 
 def _seed_schedule(conn: sqlite3.Connection) -> None:
@@ -70,6 +100,4 @@ def _seed_schedule(conn: sqlite3.Connection) -> None:
 
 
 def now_utc_iso() -> str:
-    from datetime import datetime
-
     return datetime.now(timezone.utc).isoformat()

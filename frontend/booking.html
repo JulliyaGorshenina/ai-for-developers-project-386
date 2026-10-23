@@ -15,7 +15,16 @@
     </header>
 
     <main>
-      <p class="hint">Выберите удобное время — слоты по 30 минут.</p>
+      <section class="card">
+        <label class="field">
+          Тип встречи
+          <select id="event-type"></select>
+        </label>
+        <p id="type-description" class="hint"></p>
+      </section>
+
+      <div id="confirmation" class="confirmation" hidden></div>
+
       <p id="status" class="status"></p>
       <div id="days" class="days"></div>
     </main>

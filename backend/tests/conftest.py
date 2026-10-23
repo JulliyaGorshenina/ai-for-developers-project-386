@@ -2,13 +2,29 @@
 
 import os
 import sys
-import tempfile
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-_TMP_DIR = Path(tempfile.mkdtemp(prefix="booking-test-"))
-os.environ["DB_PATH"] = str(_TMP_DIR / "test.db")
-os.environ.setdefault("ADMIN_TOKEN", "test-token")
 os.environ.setdefault("BOOKING_TZ", "Europe/Moscow")
-os.environ.setdefault("SLOT_MINUTES", "30")
+
+
+@pytest.fixture(autouse=True)
+def fresh_db(monkeypatch, tmp_path):
+    """Give every test its own seeded SQLite database."""
+    from app import config
+
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
+
+
+@pytest.fixture()
+def client():
+    """A TestClient whose lifespan seeds the fresh database."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as test_client:
+        yield test_client

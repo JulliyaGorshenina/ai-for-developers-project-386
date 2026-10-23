@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db
-from .routers import admin, availability, bookings
+from .routers import availability, bookings, event_types, schedule
 
 
 @asynccontextmanager
@@ -25,9 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(event_types.router)
 app.include_router(availability.router)
 app.include_router(bookings.router)
-app.include_router(admin.router)
+app.include_router(schedule.router)
 
 
 @app.get("/api/health", tags=["health"])

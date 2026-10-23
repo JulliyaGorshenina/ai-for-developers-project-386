@@ -18,6 +18,10 @@ node_modules/
 frontend/dist/
 .vite/
 
+# Playwright (e2e)
+test-results/
+playwright-report/
+
 # Env
 .env
 

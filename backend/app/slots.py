@@ -1,4 +1,8 @@
-"""Pure helpers for turning a weekly schedule into 30-minute slots."""
+"""Pure helpers for turning a weekly schedule into event-type slots.
+
+The grid step equals the event type duration and is counted from the start of
+each availability window (see ADR 0003). A slot is kept only if it fits whole.
+"""
 
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -15,15 +19,16 @@ def parse_hhmm(value: str) -> time:
 def generate_slots(
     day: date,
     windows: list[Window],
-    slot_minutes: int,
+    duration_minutes: int,
     tz: ZoneInfo,
 ) -> list[tuple[datetime, datetime]]:
     """Return the timezone-aware slots of ``day`` within ``windows``.
 
     Each window is ``(weekday, start, end)`` where ``weekday`` is 0 (Monday) to
-    6 (Sunday). Slots are ``slot_minutes`` long and only fully inside a window.
+    6 (Sunday). Slots are ``duration_minutes`` long and only fully inside a
+    window; the step equals the duration, counted from the window start.
     """
-    step = timedelta(minutes=slot_minutes)
+    step = timedelta(minutes=duration_minutes)
     result: list[tuple[datetime, datetime]] = []
     for weekday, start_str, end_str in windows:
         if weekday != day.weekday():

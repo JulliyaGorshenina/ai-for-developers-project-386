@@ -1,0 +1,10 @@
+output-dir: "{project-root}"
+emit:
+  - "@typespec/openapi3"
+options:
+  "@typespec/openapi3":
+    emitter-output-dir: "{output-dir}/openapi"
+    output-file: "openapi.json"
+    file-type: json
+    openapi-versions:
+      - "3.1.0"

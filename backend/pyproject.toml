@@ -16,7 +16,7 @@ dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-exclude = [".venv"]
+exclude = [".venv", "app/generated"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]

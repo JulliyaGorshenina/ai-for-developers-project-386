@@ -5,6 +5,43 @@ on:
   pull_request:
 
 jobs:
+  contract:
+    name: Contract (TypeSpec -> OpenAPI -> SDK/models)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Emit OpenAPI
+        working-directory: spec
+        run: npm ci && npx tsp compile .
+
+      - name: Generate TypeScript client
+        working-directory: frontend
+        run: npm ci && npm run gen:api
+
+      - name: Generate Pydantic models
+        run: |
+          pip install "datamodel-code-generator==0.86.0" "black==26.10.1"
+          python -m datamodel_code_generator \
+            --input spec/openapi/openapi.json \
+            --input-file-type openapi \
+            --output-model-type pydantic_v2.BaseModel \
+            --openapi-scopes schemas \
+            --target-python-version 3.12 \
+            --disable-timestamp \
+            --output backend/app/generated/models.py
+
+      - name: Fail on drift
+        run: git diff --exit-code
+
   backend:
     name: Backend (lint + tests)
     runs-on: ubuntu-latest
@@ -63,3 +100,35 @@ jobs:
 
       - name: Build (vite)
         run: npm run build
+
+  e2e:
+    name: E2E (Playwright, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Install e2e dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e
+        run: npx playwright test

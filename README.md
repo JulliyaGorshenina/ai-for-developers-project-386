@@ -3,7 +3,7 @@
 [![hexlet-check](https://github.com/JulliyaGorshenina/ai-for-developers-project-386/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/JulliyaGorshenina/ai-for-developers-project-386/actions)
 
 Сервис бронирования звонков по мотивам [cal.com](https://cal.com): владелец
-календаря публикует свободные слоты, а гость выбирает удобное время и
+публикует типы встреч и своё расписание, а гость выбирает тип, свободный слот и
 записывается на звонок.
 
 Учебный проект Хекслета: https://ru.hexlet.io/programs/ai-for-developers
@@ -11,17 +11,32 @@
 
 ## Возможности
 
-- Слоты по 30 минут, сгенерированные из недельного расписания владельца.
-- Гость выбирает день и время и оставляет заявку (имя, email, комментарий).
-- Владелец задаёт недельное расписание, видит список предстоящих встреч и
-  может отменить запись (слот снова становится свободным).
+- Владелец задаёт **типы встреч** (название, описание, длительность) и **недельное
+  расписание** (окна доступности).
+- Гость выбирает тип встречи, видит свободные слоты в окне 14 дней и оставляет
+  заявку (имя, email, комментарий).
+- Слоты строятся с шагом, равным длительности типа; занятый слот не предлагается,
+  а повторная запись (в том числе на другой тип, пересекающийся по времени)
+  отклоняется сервером.
+- Владелец видит список предстоящих встреч **всех типов** и может отменить запись
+  (слот снова становится свободным).
 - Без регистрации, личных кабинетов и синхронизации с внешними календарями.
+
+## Контракт
+
+API описан по принципу **Design First**: источник правды — TypeSpec в `spec/`. Из
+него генерируются OpenAPI 3.1, клиентский TS-SDK и серверные Pydantic-модели.
+Порядок изменений: правка TypeSpec → генерация → код обеих сторон.
+Дрейф ловится в CI (`git diff` после перегенерации).
 
 ## Стек
 
 - **Backend:** Python, FastAPI, SQLite (стандартный `sqlite3`).
-- **Frontend:** TypeScript, Vite (vanilla TS).
-- **Тесты/линтеры:** pytest, ruff; vitest, eslint, tsc.
+- **Frontend:** TypeScript, Vite (vanilla TS), сгенерированный клиент
+  (`@hey-api/openapi-ts`).
+- **Контракт:** TypeSpec → OpenAPI 3.1; серверные модели —
+  `datamodel-code-generator`.
+- **Тесты/линтеры:** pytest, ruff; vitest, eslint, tsc; Playwright (e2e).
 - **CI/CD:** GitHub Actions, release-please.
 
 ## Установка
@@ -38,17 +53,14 @@ python -m venv backend\.venv
 backend\.venv\Scripts\python -m pip install -r backend\requirements.txt
 ```
 
-### Frontend
+### Frontend и контракт
 
 ```bash
-cd frontend
-npm install
-cd ..
+cd spec; npm ci; cd ..            # инструменты TypeSpec
+cd frontend; npm ci; cd ..        # фронтенд + генератор SDK
 ```
 
 ## Использование
-
-Запустите backend (и, при необходимости, frontend dev-сервер):
 
 ```powershell
 # API + отдача собранного фронтенда: http://127.0.0.1:8000
@@ -58,18 +70,29 @@ backend\.venv\Scripts\python -m uvicorn app.main:app --reload --app-dir backend
 cd frontend; npm run dev
 ```
 
-- Страница записи: `/`
-- Страница владельца: `/admin.html` (токен из `ADMIN_TOKEN`, по умолчанию
-  `dev-admin-token`)
+- Главная страница: `/`
+- Запись: `/booking.html`
+- Кабинет владельца: `/admin.html`
 
 ### Переменные окружения
 
-| Переменная     | По умолчанию        | Назначение                     |
-| -------------- | ------------------- | ------------------------------ |
-| `ADMIN_TOKEN`  | `dev-admin-token`   | Токен доступа к API владельца  |
-| `BOOKING_TZ`   | `Europe/Moscow`     | Часовой пояс для отображения   |
-| `SLOT_MINUTES` | `30`                | Длина слота в минутах          |
-| `DB_PATH`      | `backend/bookings.db` | Файл базы данных SQLite      |
+| Переменная          | По умолчанию          | Назначение                     |
+| ------------------- | --------------------- | ------------------------------ |
+| `BOOKING_TZ`        | `Europe/Moscow`       | Часовой пояс для генерации слотов |
+| `AVAILABILITY_DAYS` | `14`                  | Длина окна записи в днях       |
+| `DB_PATH`           | `backend/bookings.db` | Файл базы данных SQLite        |
+
+## Генерация контракта
+
+```powershell
+cd spec; npx tsp compile .                        # -> spec/openapi/openapi.json
+cd ..\frontend; npm run gen:api                    # -> src/api/generated/
+cd ..; backend\.venv\Scripts\python -m datamodel_code_generator `
+  --input spec\openapi\openapi.json --input-file-type openapi `
+  --output-model-type pydantic_v2.BaseModel --openapi-scopes schemas `
+  --target-python-version 3.12 --disable-timestamp `
+  --output backend\app\generated\models.py
+```
 
 ## Тесты и линтеры
 
@@ -77,9 +100,13 @@ cd frontend; npm run dev
 # backend
 backend\.venv\Scripts\python -m pytest backend
 backend\.venv\Scripts\python -m ruff check backend
+backend\.venv\Scripts\python -m ruff format --check backend
 
 # frontend
-cd frontend; npm run lint; npm run typecheck; npm test
+cd frontend; npm run lint; npm run typecheck; npm test; npm run build
+
+# e2e (нужен собранный фронтенд и Chromium)
+cd ..; npm install; npx playwright install chromium; npx playwright test
 ```
 
 ## Коммиты и релизы

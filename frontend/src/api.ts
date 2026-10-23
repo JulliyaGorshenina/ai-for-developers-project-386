@@ -1,60 +1,78 @@
-import type { Booking, BookingCreate, DaySlots, Slot, Window } from "./types";
+import type {
+  Booking,
+  BookingCreate,
+  DaySlots,
+  EventType,
+  EventTypeCreate,
+  Window,
+} from "./api/generated";
+import {
+  cancelBooking as sdkCancelBooking,
+  createBooking as sdkCreateBooking,
+  createEventType as sdkCreateEventType,
+  deleteEventType as sdkDeleteEventType,
+  getAvailability as sdkGetAvailability,
+  getSchedule as sdkGetSchedule,
+  listBookings as sdkListBookings,
+  listEventTypes as sdkListEventTypes,
+  updateSchedule as sdkUpdateSchedule,
+} from "./api/generated";
+import { client } from "./api/generated/client.gen";
 
-const BASE = "/api";
+client.setConfig({ baseUrl: "" });
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(body.detail ?? `Ошибка запроса (${response.status})`);
+export * from "./api/generated";
+
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
   }
-  return (await response.json()) as T;
+  if (error && typeof error === "object" && "detail" in error) {
+    return String((error as { detail: unknown }).detail);
+  }
+  return "Неизвестная ошибка";
 }
 
-export function getAvailability(days = 14): Promise<DaySlots[]> {
-  return request<DaySlots[]>(`/availability?days=${days}`);
+async function unwrap<T>(result: Promise<{ data?: T; error?: unknown }>): Promise<T> {
+  const { data, error } = await result;
+  if (error !== undefined) {
+    throw new Error(errorMessage(error));
+  }
+  return data as T;
 }
 
-export function getSlots(date: string): Promise<Slot[]> {
-  return request<Slot[]>(`/slots?date=${encodeURIComponent(date)}`);
+export function listEventTypes(): Promise<EventType[]> {
+  return unwrap(sdkListEventTypes());
 }
 
-export function createBooking(payload: BookingCreate): Promise<Booking> {
-  return request<Booking>("/bookings", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+export function createEventType(body: EventTypeCreate): Promise<EventType> {
+  return unwrap(sdkCreateEventType({ body }));
 }
 
-export function getSchedule(token: string): Promise<Window[]> {
-  return request<Window[]>("/admin/schedule", {
-    headers: { "X-Admin-Token": token },
-  });
+export function deleteEventType(id: string): Promise<void> {
+  return unwrap(sdkDeleteEventType({ path: { id } }));
 }
 
-export function updateSchedule(token: string, windows: Window[]): Promise<Window[]> {
-  return request<Window[]>("/admin/schedule", {
-    method: "PUT",
-    headers: { "X-Admin-Token": token },
-    body: JSON.stringify({ windows }),
-  });
+export function getAvailability(id: string, days = 14): Promise<DaySlots[]> {
+  return unwrap(sdkGetAvailability({ path: { id }, query: { days } }));
 }
 
-export function getBookings(token: string, upcoming = true): Promise<Booking[]> {
-  return request<Booking[]>(`/admin/bookings?upcoming=${upcoming}`, {
-    headers: { "X-Admin-Token": token },
-  });
+export function getSchedule(): Promise<Window[]> {
+  return unwrap(sdkGetSchedule());
 }
 
-export function cancelBooking(token: string, id: number): Promise<Booking> {
-  return request<Booking>(`/admin/bookings/${id}`, {
-    method: "DELETE",
-    headers: { "X-Admin-Token": token },
-  });
+export function updateSchedule(windows: Window[]): Promise<Window[]> {
+  return unwrap(sdkUpdateSchedule({ body: { windows } }));
+}
+
+export function listBookings(upcoming = true): Promise<Booking[]> {
+  return unwrap(sdkListBookings({ query: { upcoming } }));
+}
+
+export function createBooking(body: BookingCreate): Promise<Booking> {
+  return unwrap(sdkCreateBooking({ body }));
+}
+
+export function cancelBooking(id: number): Promise<Booking> {
+  return unwrap(sdkCancelBooking({ path: { id } }));
 }

@@ -1,19 +1,31 @@
 import "./styles.css";
 
-import { createBooking, getAvailability } from "./api";
+import {
+  createBooking,
+  errorMessage,
+  getAvailability,
+  listEventTypes,
+  type Booking,
+  type DaySlots,
+  type EventType,
+  type Slot,
+} from "./api";
 import { formatSlotRange, weekdayName } from "./format";
-import type { BookingCreate, Slot } from "./types";
 
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+const typeSelect = document.querySelector<HTMLSelectElement>("#event-type")!;
+const typeDescription = document.querySelector<HTMLParagraphElement>("#type-description")!;
 const daysEl = document.querySelector<HTMLDivElement>("#days")!;
 const statusEl = document.querySelector<HTMLParagraphElement>("#status")!;
+const confirmationEl = document.querySelector<HTMLDivElement>("#confirmation")!;
 const dialog = document.querySelector<HTMLDialogElement>("#booking-dialog")!;
 const form = document.querySelector<HTMLFormElement>("#booking-form")!;
 const dialogTitle = document.querySelector<HTMLHeadingElement>("#dialog-title")!;
 const dialogError = document.querySelector<HTMLParagraphElement>("#dialog-error")!;
 const cancelBtn = document.querySelector<HTMLButtonElement>("#cancel-btn")!;
 
+let eventTypes: EventType[] = [];
 let selected: Slot | null = null;
 
 function openDialog(slot: Slot): void {
@@ -38,6 +50,7 @@ function renderDay(date: string, weekday: number, slots: Slot[]): HTMLElement {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "slot";
+    button.dataset.start = slot.start;
     button.textContent = formatSlotRange(slot.start, slot.end, timeZone);
     button.addEventListener("click", () => openDialog(slot));
     grid.append(button);
@@ -46,49 +59,103 @@ function renderDay(date: string, weekday: number, slots: Slot[]): HTMLElement {
   return section;
 }
 
-async function load(): Promise<void> {
+function renderDays(days: DaySlots[]): void {
+  daysEl.replaceChildren();
+  if (days.length === 0) {
+    statusEl.textContent = "Свободных слотов пока нет.";
+    return;
+  }
+  statusEl.textContent = "";
+  for (const day of days) {
+    daysEl.append(renderDay(day.date, day.weekday, day.slots));
+  }
+}
+
+async function loadAvailability(): Promise<void> {
+  const id = typeSelect.value;
+  if (!id) {
+    return;
+  }
+  const eventType = eventTypes.find((type) => type.id === id);
+  typeDescription.textContent = eventType?.description ?? "";
   statusEl.textContent = "Загружаем свободные слоты…";
   daysEl.replaceChildren();
   try {
-    const days = await getAvailability(14);
-    if (days.length === 0) {
-      statusEl.textContent = "Свободных слотов пока нет.";
+    const days = await getAvailability(id, 14);
+    renderDays(days);
+  } catch (error) {
+    statusEl.textContent = `Не удалось загрузить слоты: ${errorMessage(error)}`;
+  }
+}
+
+async function loadEventTypes(): Promise<void> {
+  statusEl.textContent = "Загружаем типы встреч…";
+  try {
+    eventTypes = await listEventTypes();
+    typeSelect.replaceChildren();
+    for (const type of eventTypes) {
+      const option = document.createElement("option");
+      option.value = type.id;
+      option.textContent = `${type.name} · ${type.duration_minutes} мин`;
+      typeSelect.append(option);
+    }
+    if (eventTypes.length === 0) {
+      statusEl.textContent = "Пока нет доступных типов встреч.";
       return;
     }
-    statusEl.textContent = "";
-    for (const day of days) {
-      daysEl.append(renderDay(day.date, day.weekday, day.slots));
-    }
+    await loadAvailability();
   } catch (error) {
-    statusEl.textContent = `Не удалось загрузить слоты: ${(error as Error).message}`;
+    statusEl.textContent = `Не удалось загрузить типы встреч: ${errorMessage(error)}`;
   }
 }
 
-async function submitBooking(payload: BookingCreate): Promise<void> {
-  dialogError.textContent = "";
-  try {
-    await createBooking(payload);
-    dialog.close();
-    await load();
-  } catch (error) {
-    dialogError.textContent = (error as Error).message;
-  }
+function showConfirmation(booking: Booking): void {
+  confirmationEl.hidden = false;
+  confirmationEl.replaceChildren();
+
+  const heading = document.createElement("strong");
+  heading.textContent = "Запись подтверждена";
+
+  const detail = document.createElement("p");
+  detail.textContent = `Мы ждём вас ${formatSlotRange(
+    booking.slot_start,
+    booking.slot_end,
+    timeZone,
+  )}. Подтверждение отправлено на ${booking.email}.`;
+
+  confirmationEl.append(heading, detail);
+  confirmationEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-cancelBtn.addEventListener("click", () => dialog.close());
-
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+async function submitBooking(): Promise<void> {
   if (!selected) {
     return;
   }
+  dialogError.textContent = "";
   const data = new FormData(form);
-  void submitBooking({
-    slot_start: selected.start,
-    name: String(data.get("name") ?? ""),
-    email: String(data.get("email") ?? ""),
-    comment: String(data.get("comment") ?? ""),
-  });
+  try {
+    const booking = await createBooking({
+      event_type_id: typeSelect.value,
+      slot_start: selected.start,
+      name: String(data.get("name") ?? ""),
+      email: String(data.get("email") ?? ""),
+      comment: String(data.get("comment") ?? ""),
+    });
+    dialog.close();
+    showConfirmation(booking);
+    await loadAvailability();
+  } catch (error) {
+    dialogError.textContent = errorMessage(error);
+  }
+}
+
+typeSelect.addEventListener("change", () => {
+  void loadAvailability();
+});
+cancelBtn.addEventListener("click", () => dialog.close());
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitBooking();
 });
 
-void load();
+void loadEventTypes();

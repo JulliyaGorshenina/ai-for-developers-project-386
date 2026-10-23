@@ -1,22 +1,33 @@
 import "./styles.css";
 
-import { cancelBooking, getBookings, getSchedule, updateSchedule } from "./api";
+import {
+  cancelBooking,
+  createEventType,
+  deleteEventType,
+  errorMessage,
+  getSchedule,
+  listBookings,
+  listEventTypes,
+  updateSchedule,
+  type Booking,
+  type EventType,
+  type Window,
+} from "./api";
 import { weekdayName } from "./format";
-import type { Booking, Window } from "./types";
 
-const TOKEN_KEY = "booking-admin-token";
-
-const tokenInput = document.querySelector<HTMLInputElement>("#token-input")!;
-const saveTokenBtn = document.querySelector<HTMLButtonElement>("#save-token")!;
-const tokenStatus = document.querySelector<HTMLParagraphElement>("#token-status")!;
 const scheduleRows = document.querySelector<HTMLDivElement>("#schedule-rows")!;
 const addWindowBtn = document.querySelector<HTMLButtonElement>("#add-window")!;
 const saveScheduleBtn = document.querySelector<HTMLButtonElement>("#save-schedule")!;
 const scheduleStatus = document.querySelector<HTMLParagraphElement>("#schedule-status")!;
+
+const typesEl = document.querySelector<HTMLDivElement>("#event-types")!;
+const typeForm = document.querySelector<HTMLFormElement>("#event-type-form")!;
+const typesStatus = document.querySelector<HTMLParagraphElement>("#types-status")!;
+
 const bookingsEl = document.querySelector<HTMLDivElement>("#bookings")!;
 const bookingsStatus = document.querySelector<HTMLParagraphElement>("#bookings-status")!;
 
-let token = localStorage.getItem(TOKEN_KEY) ?? "";
+const typeById = new Map<string, EventType>();
 
 function renderWindowRow(window: Window): void {
   const row = document.createElement("div");
@@ -65,6 +76,34 @@ function readWindows(): Window[] {
   return windows;
 }
 
+function renderType(eventType: EventType): void {
+  const row = document.createElement("div");
+  row.className = "booking-row";
+
+  const info = document.createElement("div");
+  info.className = "booking-info";
+
+  const name = document.createElement("strong");
+  name.textContent = `${eventType.name} · ${eventType.duration_minutes} мин`;
+
+  const meta = document.createElement("span");
+  meta.className = "muted";
+  meta.textContent = `${eventType.id} — ${eventType.description || "без описания"}`;
+
+  info.append(name, meta);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "secondary";
+  remove.textContent = "Удалить";
+  remove.addEventListener("click", () => {
+    void removeType(eventType.id);
+  });
+
+  row.append(info, remove);
+  typesEl.append(row);
+}
+
 function renderBooking(booking: Booking): void {
   const row = document.createElement("div");
   row.className = "booking-row";
@@ -75,8 +114,9 @@ function renderBooking(booking: Booking): void {
   const when = document.createElement("strong");
   when.textContent = new Date(booking.slot_start).toLocaleString("ru-RU");
 
+  const type = typeById.get(booking.event_type_id);
   const who = document.createElement("span");
-  who.textContent = `${booking.name} · ${booking.email}`;
+  who.textContent = `${type?.name ?? booking.event_type_id} · ${booking.name} · ${booking.email}`;
 
   const comment = document.createElement("span");
   comment.className = "muted";
@@ -97,51 +137,62 @@ function renderBooking(booking: Booking): void {
 }
 
 async function loadSchedule(): Promise<void> {
-  if (!token) {
-    return;
-  }
   scheduleStatus.textContent = "Загружаем расписание…";
   try {
-    const windows = await getSchedule(token);
+    const windows = await getSchedule();
     scheduleRows.replaceChildren();
     windows.forEach(renderWindowRow);
     scheduleStatus.textContent = "";
   } catch (error) {
-    scheduleStatus.textContent = (error as Error).message;
+    scheduleStatus.textContent = errorMessage(error);
+  }
+}
+
+async function loadTypes(): Promise<void> {
+  typesStatus.textContent = "Загружаем типы встреч…";
+  try {
+    const types = await listEventTypes();
+    typeById.clear();
+    typesEl.replaceChildren();
+    types.forEach((type) => {
+      typeById.set(type.id, type);
+      renderType(type);
+    });
+    typesStatus.textContent = types.length === 0 ? "Типов встреч пока нет." : "";
+  } catch (error) {
+    typesStatus.textContent = errorMessage(error);
   }
 }
 
 async function loadBookings(): Promise<void> {
-  if (!token) {
-    return;
-  }
   bookingsStatus.textContent = "Загружаем встречи…";
   try {
-    const bookings = await getBookings(token);
+    const bookings = await listBookings(true);
     bookingsEl.replaceChildren();
     bookingsStatus.textContent = bookings.length === 0 ? "Предстоящих встреч нет." : "";
     bookings.forEach(renderBooking);
   } catch (error) {
-    bookingsStatus.textContent = (error as Error).message;
+    bookingsStatus.textContent = errorMessage(error);
+  }
+}
+
+async function removeType(id: string): Promise<void> {
+  try {
+    await deleteEventType(id);
+    await Promise.all([loadTypes(), loadBookings()]);
+  } catch (error) {
+    typesStatus.textContent = errorMessage(error);
   }
 }
 
 async function removeBooking(id: number): Promise<void> {
   try {
-    await cancelBooking(token, id);
+    await cancelBooking(id);
     await loadBookings();
   } catch (error) {
-    bookingsStatus.textContent = (error as Error).message;
+    bookingsStatus.textContent = errorMessage(error);
   }
 }
-
-saveTokenBtn.addEventListener("click", () => {
-  token = tokenInput.value.trim();
-  localStorage.setItem(TOKEN_KEY, token);
-  tokenStatus.textContent = token ? "Токен сохранён." : "Токен очищен.";
-  void loadSchedule();
-  void loadBookings();
-});
 
 addWindowBtn.addEventListener("click", () => {
   renderWindowRow({ weekday: 0, start_time: "10:00", end_time: "18:00" });
@@ -149,17 +200,35 @@ addWindowBtn.addEventListener("click", () => {
 
 saveScheduleBtn.addEventListener("click", () => {
   scheduleStatus.textContent = "Сохраняем…";
-  void updateSchedule(token, readWindows())
+  void updateSchedule(readWindows())
     .then(() => {
       scheduleStatus.textContent = "Расписание сохранено.";
     })
-    .catch((error: Error) => {
-      scheduleStatus.textContent = error.message;
+    .catch((error: unknown) => {
+      scheduleStatus.textContent = errorMessage(error);
     });
 });
 
-tokenInput.value = token;
-if (token) {
-  void loadSchedule();
-  void loadBookings();
-}
+typeForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const data = new FormData(typeForm);
+  typesStatus.textContent = "Сохраняем тип встречи…";
+  void createEventType({
+    id: String(data.get("id") ?? ""),
+    name: String(data.get("name") ?? ""),
+    description: String(data.get("description") ?? ""),
+    duration_minutes: Number(data.get("duration_minutes") ?? 30),
+  })
+    .then(() => {
+      typeForm.reset();
+      typesStatus.textContent = "Тип встречи сохранён.";
+      return Promise.all([loadTypes(), loadBookings()]);
+    })
+    .catch((error: unknown) => {
+      typesStatus.textContent = errorMessage(error);
+    });
+});
+
+void loadSchedule();
+void loadTypes();
+void loadBookings();
