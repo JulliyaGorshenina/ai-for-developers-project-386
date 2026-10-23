@@ -1,0 +1,28 @@
+# Version control / CI
+.git
+.github
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/*.egg-info
+
+# Node
+**/node_modules
+frontend/dist
+
+# Local databases and runtime artifacts
+*.db
+*.sqlite3
+
+# Playwright output
+test-results
+playwright-report
+
+# Not needed to build or run the image
+docs
+e2e
